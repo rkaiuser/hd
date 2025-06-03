@@ -2,6 +2,8 @@ import streamlit as st
 import yt_dlp
 import os
 import tempfile
+import time
+import re
 
 st.set_page_config(page_title="🎬 MP4 Downloader", layout="centered")
 
@@ -57,26 +59,35 @@ if url:
 
     if st.button("⬇️ Download"):
         format_id = format_map[selected]
+        progress_text = st.empty()
+        progress_bar = st.progress(0)
 
         temp_dir = tempfile.mkdtemp()
         outtmpl = os.path.join(temp_dir, "%(title)s.%(ext)s")
 
-        # Status placeholder
-        progress_text = st.empty()
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
         def progress_hook(d):
             if d['status'] == 'downloading':
+                percent = d.get('_percent_str', '0%').strip()
                 downloaded = d.get('_downloaded_bytes_str', '0B')
                 total = d.get('_total_bytes_str', '0B')
                 speed = d.get('_speed_str', '0B/s')
-                percent = d.get('_percent_str', '0%')
+
+                # Remove ANSI color codes
+                downloaded = ansi_escape.sub('', downloaded)
+                total = ansi_escape.sub('', total)
+                speed = ansi_escape.sub('', speed)
+                percent_num = float(percent.replace('%', '').strip() or 0)
+
+                progress_bar.progress(int(percent_num))
                 progress_text.text(f"📦 {percent} downloaded: {downloaded} / {total} at {speed}")
 
         ydl_opts = {
             'format': f"{format_id}+bestaudio",
             'merge_output_format': 'mp4',
             'outtmpl': outtmpl,
-            'ffmpeg_location': '/usr/bin/ffmpeg',
+            'ffmpeg_location': '',  # Leave empty for auto detection (Render friendly)
             'quiet': True,
             'progress_hooks': [progress_hook],
         }
